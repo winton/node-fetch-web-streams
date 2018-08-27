@@ -7,7 +7,7 @@
 
 import { STATUS_CODES } from 'http';
 import Headers from './headers.js';
-import Body, { clone } from './body';
+import Body, { cloneBody , getInstanceName} from './body';
 
 const INTERNALS = Symbol('Response internals');
 
@@ -20,6 +20,10 @@ const INTERNALS = Symbol('Response internals');
  */
 export default class Response {
 	constructor(body = null, opts = {}) {
+		if (!opts.name) {
+			opts.name = "Response";
+		}
+
 		Body.call(this, body, opts);
 
 		const status = opts.status || 200;
@@ -61,14 +65,14 @@ export default class Response {
 	 * @return  Response
 	 */
 	clone() {
-		return new Response(clone(this), {
+		return new Response(cloneBody(this), {
 			url: this.url,
 			status: this.status,
 			statusText: this.statusText,
 			headers: this.headers,
-			ok: this.ok
+			ok: this.ok,
+			name: `cloned(${getInstanceName(this)})`
 		});
-
 	}
 }
 

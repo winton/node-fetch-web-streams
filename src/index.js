@@ -11,9 +11,11 @@ import { resolve as resolve_url } from 'url';
 import http from 'http';
 import https from 'https';
 import zlib from 'zlib';
+
+// import { ReadableStream, WritableStream, TransformStream } from "web-streams-polyfill";
 import { PassThrough } from 'stream';
 
-import Body, { writeToStream, getTotalBytes } from './body';
+import { writeToStream, getTotalBytes, getInstanceBody } from './body';
 import Response from './response';
 import Headers, { createHeadersLenient } from './headers';
 import Request, { getNodeRequestOptions } from './request';
@@ -27,16 +29,8 @@ import FetchError from './fetch-error';
  * @return  Promise
  */
 export default function fetch(url, opts) {
-
-	// allow custom promise
-	if (!fetch.Promise) {
-		throw new Error('native promise missing, set fetch.Promise to your favorite alternative');
-	}
-
-	Body.Promise = fetch.Promise;
-
 	// wrap http.request into fetch
-	return new fetch.Promise((resolve, reject) => {
+	return new Promise((resolve, reject) => {
 		// build request object
 		const request = new Request(url, opts);
 		const options = getNodeRequestOptions(request);
@@ -104,6 +98,8 @@ export default function fetch(url, opts) {
 							return;
 						}
 
+						const requestBody = getInstanceBody(request);
+
 						// HTTP-redirect fetch step 6 (counter increment)
 						// Create a new Request object.
 						const requestOpts = {
@@ -113,11 +109,11 @@ export default function fetch(url, opts) {
 							agent: request.agent,
 							compress: request.compress,
 							method: request.method,
-							body: request.body
+							body: requestBody
 						};
 
 						// HTTP-redirect fetch step 9
-						if (res.statusCode !== 303 && request.body && getTotalBytes(request) === null) {
+						if (res.statusCode !== 303 && requestBody && getTotalBytes(request) === null) {
 							reject(new FetchError('Cannot follow redirect with body being a readable stream', 'unsupported-redirect'));
 							finalize();
 							return;
@@ -138,7 +134,13 @@ export default function fetch(url, opts) {
 			}
 
 			// prepare response
+			// const { readable, writable } = new TransformStream();
+			// const writer = writable.getWriter();
 			let body = res.pipe(new PassThrough());
+
+			// res.on("data", (data) => writer.write(data));
+			// res.on("end", () => writer.close());
+
 			const response_options = {
 				url: request.url,
 				status: res.statusCode,
@@ -178,11 +180,9 @@ export default function fetch(url, opts) {
 			if (codings == 'gzip' || codings == 'x-gzip') {
 				body = body.pipe(zlib.createGunzip(zlibOptions));
 				resolve(new Response(body, response_options));
-				return;
-			}
 
 			// for deflate
-			if (codings == 'deflate' || codings == 'x-deflate') {
+			} else if (codings == 'deflate' || codings == 'x-deflate') {
 				// handle the infamous raw deflate response from old servers
 				// a hack for old IIS and Apache servers
 				const raw = res.pipe(new PassThrough());
@@ -195,11 +195,11 @@ export default function fetch(url, opts) {
 					}
 					resolve(new Response(body, response_options));
 				});
-				return;
-			}
 
 			// otherwise, use response as-is
-			resolve(new Response(body, response_options));
+			} else {
+				resolve(new Response(body, response_options));
+			}
 		});
 
 		writeToStream(req, request);
@@ -215,8 +215,6 @@ export default function fetch(url, opts) {
  */
 fetch.isRedirect = code => code === 301 || code === 302 || code === 303 || code === 307 || code === 308;
 
-// expose Promise
-fetch.Promise = global.Promise;
 export {
 	Headers,
 	Request,
