@@ -148,6 +148,18 @@ export default class TestServer {
 			}, 1000);
 		}
 
+		if (p === '/delayed') {
+			res.statusCode = 200;
+			res.setHeader('Content-Type', 'text/plain');
+			res.write('test');
+			setTimeout(function() {
+				res.write('test');
+			}, 100);
+			setTimeout(function() {
+				res.end('test');
+			}, 1000);
+		}
+
 		if (p === '/cookie') {
 			res.statusCode = 200;
 			res.setHeader('Set-Cookie', ['a=1', 'b=1']);
@@ -161,8 +173,11 @@ export default class TestServer {
 				res.write('test');
 			}, 50);
 			setTimeout(function() {
-				res.end('test');
+				res.write('test');
 			}, 100);
+			setTimeout(function() {
+				res.end();
+			}, 120);
 		}
 
 		if (p === '/size/long') {
@@ -325,12 +340,15 @@ export default class TestServer {
 			let body = '';
 			req.on('data', function(c) { body += c });
 			req.on('end', function() {
-				res.end(JSON.stringify({
+				const data = {
 					method: req.method,
 					url: req.url,
 					headers: req.headers,
 					body
-				}));
+				};
+				// console.log("SERVER: ", data)
+
+				res.end(JSON.stringify(data));
 			});
 		}
 

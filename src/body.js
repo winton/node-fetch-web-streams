@@ -5,14 +5,153 @@
  * Body interface provides common methods for Request and Response
  */
 
-import Stream, { PassThrough } from 'stream';
+import { ReadableStream, TransformStream} from "web-streams-polyfill";
+
 import Blob, { BUFFER } from './blob.js';
 import FetchError from './fetch-error.js';
+import Stream, { PassThrough } from "stream";
 
 let convert;
 try { convert = require('encoding').convert; } catch(e) {}
 
-const INTERNALS = Symbol('Body internals');
+function isUInt8Array(value) {
+	return Object.prototype.toString.call(chunk) === "[object UInt8Array]";
+}
+
+export const INTERNALS = Symbol('Body internals');
+
+export function getTypeOfBody(body) {
+	if (body == null) {
+		return "null";
+	} else if (typeof body === 'string') {
+		return "String";
+	} else if (isURLSearchParams(body)) {
+		return "URLSearchParams";
+	} else if (body instanceof Blob) {
+		return "Blob";
+	} else if (Buffer.isBuffer(body)) {
+		return "Buffer";
+	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
+		return "ArrayBuffer"
+	} else if (ArrayBuffer.isView(body)) {
+		return "ArrayBufferView";
+	} else if (body.toString() ==='[object FormData]' || Object.prototype.toString.call(body) === '[object FormData]') {
+		return "FormData";
+	} else if (body instanceof Stream) {
+		return "Stream"
+	} else if (
+		body instanceof ReadableStream ||
+		// Allow detecting a "ReadableStream" from a different install of web-streams-polyfill
+		(body.constructor.name === "ReadableStream" && typeof body.getReader == "function")
+	) {
+		return "ReadableStream";
+	} else {
+		return "other";
+	}
+}
+
+function readableNodeToWeb(nodeStream, instance) {
+    return new ReadableStream({
+        start(controller) {
+            nodeStream.pause();
+            nodeStream.on('data', chunk => {
+				// TODO: Should we only do Buffer.from() if chunk is a UInt8Array?
+				// Potentially it makes more sense for down-stream consumers of fetch to cast to Buffer, instead?
+				// if(isUInt8Array(chunk)) {
+				controller.enqueue(Buffer.from(chunk));
+
+				// HELP WANTED: The node-web-streams package pauses the nodeStream here, however,
+				// if we do that, then it gets permanently paused. Why?
+                // 		nodeStream.pause();
+            });
+            nodeStream.on('end', () => controller.close());
+            nodeStream.on('error', (err) => {
+				controller.error(new FetchError(`Invalid response body while trying to fetch ${instance.url}: ${err.message}`, 'system', err))
+			});
+        },
+        pull(controller) {
+            nodeStream.resume();
+        },
+        cancel(reason) {
+            nodeStream.pause();
+        }
+    });
+}
+
+export function createReadableStream(instance) {
+	const body = getInstanceBody(instance);
+	const bodyType = getTypeOfBody(body);
+
+	if (bodyType === "null") {
+		return null;
+	}
+
+	if (bodyType === 'ReadableStream') {
+		return body.pipeThrough(new TransformStream({
+			transform(chunk, controller) {
+				// TODO: Should we only do Buffer.from() if chunk is a UInt8Array?
+				// Potentially it makes more sense for down-stream consumers of fetch to cast to Buffer, instead?
+				// if(isUInt8Array(chunk)) {
+				controller.enqueue(Buffer.from(chunk))
+			}
+		}));
+	}
+
+	if (bodyType === "Stream") {
+		body.pause();
+		return readableNodeToWeb(body, instance);
+	}
+
+	const readable = new ReadableStream({
+		start(controller) {
+			switch (bodyType) {
+				case "String":
+					// body is a string:
+					controller.enqueue(Buffer.from(body));
+					controller.close();
+					break;
+				case "URLSearchParams":
+					// body is a URLSearchParams
+					controller.enqueue(Buffer.from(body.toString()));
+					controller.close();
+					break;
+				case "Blob":
+					// body is blob
+					controller.enqueue(Buffer.from(body[BUFFER]));
+					controller.close();
+					break;
+				case "Buffer":
+					// body is Buffer
+					controller.enqueue(Buffer.from(body))
+					controller.close();
+					break;
+				case "ArrayBuffer":
+					// body is ArrayBuffer
+					controller.enqueue(Buffer.from(body))
+					controller.close();
+					break;
+				case "ArrayBufferView":
+					// body is ArrayBufferView
+					controller.enqueue(Buffer.from(body.buffer))
+					controller.close();
+					break;
+				case "FormData":
+					controller.enqueue(Buffer.from(body.toString()));
+					controller.close();
+					break;
+				case "other":
+					controller.enqueue(Buffer.from(String(body)));
+					controller.close();
+					break;
+				default:
+					throw new Error("createReadableStream received an instance body that getTypeOfBody could not understand");
+			}
+		}
+	});
+
+	return readable;
+}
+
 
 /**
  * Body mixin
@@ -25,48 +164,26 @@ const INTERNALS = Symbol('Body internals');
  */
 export default function Body(body, {
 	size = 0,
-	timeout = 0
+	timeout = 0,
+	name = "Body"
 } = {}) {
-	if (body == null) {
-		// body is undefined or null
-		body = null;
-	} else if (typeof body === 'string') {
-		// body is string
-	} else if (isURLSearchParams(body)) {
-		// body is a URLSearchParams
-	} else if (body instanceof Blob) {
-		// body is blob
-	} else if (Buffer.isBuffer(body)) {
-		// body is Buffer
-	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
-	} else if (body instanceof Stream) {
-		// body is stream
-	} else {
-		// none of the above
-		// coerce to string
-		body = String(body);
-	}
-	this[INTERNALS] = {
-		body,
-		disturbed: false,
-		error: null
-	};
 	this.size = size;
 	this.timeout = timeout;
 
-	if (body instanceof Stream) {
-		body.on('error', err => {
-			this[INTERNALS].error = new FetchError(`Invalid response body while trying to fetch ${this.url}: ${err.message}`, 'system', err);
-		});
-	}
+	this[INTERNALS] = {
+		body: body,
+		readableStream: null,
+		disturbed: false,
+		name
+	};
+
+	this[INTERNALS].readableStream = createReadableStream(this)
 }
 
 Body.prototype = {
+	// NOTE: Firefox and Chrome return `undefined` if initial body is undefined, when looking at Request.body, they always return undefined.
 	get body() {
-		return this[INTERNALS].body;
+		return getInstanceReadableStream(this);
 	},
 
 	get bodyUsed() {
@@ -79,7 +196,14 @@ Body.prototype = {
 	 * @return  Promise
 	 */
 	arrayBuffer() {
-		return consumeBody.call(this).then(buf => buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength));
+		return consumeBody.call(this).then(buf => {
+			var ab = new ArrayBuffer(buf.length);
+			var view = new Uint8Array(ab);
+			for (var i = 0; i < buf.length; ++i) {
+				view[i] = buf[i];
+			}
+			return ab;
+		});
 	},
 
 	/**
@@ -110,7 +234,7 @@ Body.prototype = {
 			try {
 				return JSON.parse(buffer.toString());
 			} catch (err) {
-				return Body.Promise.reject(new FetchError(`invalid json response body at ${this.url} reason: ${err.message}`, 'invalid-json'));
+				return Promise.reject(new FetchError(`invalid json response body at ${this.url} reason: ${err.message}`, 'invalid-json'));
 			}
 		})
 	},
@@ -174,103 +298,84 @@ Body.mixIn = function (proto) {
  * @return  Promise
  */
 function consumeBody() {
-	if (this[INTERNALS].disturbed) {
-		return Body.Promise.reject(new TypeError(`body used already for: ${this.url}`));
+	const instance = this;
+
+	if (instance[INTERNALS].disturbed) {
+		return Promise.reject(new TypeError(`body used already for: ${instance.url}`));
 	}
 
-	this[INTERNALS].disturbed = true;
+	instance[INTERNALS].disturbed = true;
 
-	if (this[INTERNALS].error) {
-		return Body.Promise.reject(this[INTERNALS].error);
-	}
+	let resTimeout;
+	const promise = new Promise((resolve, reject) => {
+		const readable = getInstanceReadableStream(instance);
 
-	// body is null
-	if (this.body === null) {
-		return Body.Promise.resolve(Buffer.alloc(0));
-	}
-
-	// body is string
-	if (typeof this.body === 'string') {
-		return Body.Promise.resolve(Buffer.from(this.body));
-	}
-
-	// body is blob
-	if (this.body instanceof Blob) {
-		return Body.Promise.resolve(this.body[BUFFER]);
-	}
-
-	// body is buffer
-	if (Buffer.isBuffer(this.body)) {
-		return Body.Promise.resolve(this.body);
-	}
-
-	// body is ArrayBuffer
-	if (Object.prototype.toString.call(this.body) === '[object ArrayBuffer]') {
-		return Body.Promise.resolve(Buffer.from(this.body));
-	}
-
-	// body is ArrayBufferView
-	if (ArrayBuffer.isView(this.body)) {
-		return Body.Promise.resolve(Buffer.from(this.body.buffer, this.body.byteOffset, this.body.byteLength));
-	}
-
-	// istanbul ignore if: should never happen
-	if (!(this.body instanceof Stream)) {
-		return Body.Promise.resolve(Buffer.alloc(0));
-	}
-
-	// body is stream
-	// get ready to actually consume the body
-	let accum = [];
-	let accumBytes = 0;
-	let abort = false;
-
-	return new Body.Promise((resolve, reject) => {
-		let resTimeout;
-
-		// allow timeout on slow response body
-		if (this.timeout) {
-			resTimeout = setTimeout(() => {
-				abort = true;
-				reject(new FetchError(`Response timeout while trying to fetch ${this.url} (over ${this.timeout}ms)`, 'body-timeout'));
-			}, this.timeout);
+		if (readable == null) {
+			return resolve(Buffer.alloc(0));
 		}
 
-		// handle stream error, such as incorrect content-encoding
-		this.body.on('error', err => {
-			reject(new FetchError(`Invalid response body while trying to fetch ${this.url}: ${err.message}`, 'system', err));
-		});
+		const reader = readable.getReader();
+		let timedOut = false;
 
-		this.body.on('data', chunk => {
-			if (abort || chunk === null) {
-				return;
-			}
+		// allow timeout on slow response body
+		if (instance.timeout) {
+			resTimeout = setTimeout(() => {
+				timedOut = true;
+				reject(new FetchError(`Response timeout while trying to fetch ${instance.url} (over ${instance.timeout}ms)`, 'body-timeout'));
+			}, instance.timeout);
+		}
 
-			if (this.size && accumBytes + chunk.length > this.size) {
-				abort = true;
-				reject(new FetchError(`content size at ${this.url} over limit: ${this.size}`, 'max-size'));
-				return;
-			}
+		let buffers = [];
+		let totalBytes = 0;
 
-			accumBytes += chunk.length;
-			accum.push(chunk);
-		});
+		function push() {
+			reader.read().then(function(read) {
+				let bufferedData;
+				let chunk;
 
-		this.body.on('end', () => {
-			if (abort) {
-				return;
-			}
+				if (timedOut) {
+					return;
+				}
 
-			clearTimeout(resTimeout);
+				if (read.done) {
+					try {
+						bufferedData = Buffer.concat(buffers, totalBytes)
+					} catch(err) {
+						// handle streams that have accumulated too much data (issue #414)
+						reject(new FetchError(`Could not create Buffer from response body for ${instance.url}: ${err.message}`, 'system', err));
+						return;
+					}
 
-			try {
-				resolve(Buffer.concat(accum));
-			} catch (err) {
-				// handle streams that have accumulated too much data (issue #414)
-				reject(new FetchError(`Could not create Buffer from response body for ${this.url}: ${err.message}`, 'system', err));
-			}
-		});
+					resolve(bufferedData);
+					return;
+				}
+
+				chunk = Buffer.from(read.value);
+
+				if (instance.size && totalBytes + chunk.length > instance.size) {
+					reject(new FetchError(`content size at ${instance.url} over limit: ${instance.size}`, 'max-size'));
+					return;
+				}
+
+
+				buffers.push(chunk);
+				totalBytes += chunk.length;
+
+				push();
+			}, function (err) {
+				reject(err);
+			});
+		}
+
+		push();
 	});
+
+	promise.then(
+		() => resTimeout && clearTimeout(resTimeout),
+		() => resTimeout && clearTimeout(resTimeout)
+	);
+
+	return promise;
 }
 
 /**
@@ -367,10 +472,9 @@ function isURLSearchParams(obj) {
  * @param   Mixed  instance  Response or Request instance
  * @return  Mixed
  */
-export function clone(instance) {
-	let p1, p2;
-	let body = instance.body;
-
+export function cloneBody(instance) {
+	const body = getInstanceBody(instance);
+	const bodyType = getTypeOfBody(body);
 	// don't allow cloning a used body
 	if (instance.bodyUsed) {
 		throw new Error('cannot clone body after it is used');
@@ -378,17 +482,31 @@ export function clone(instance) {
 
 	// check that body is a stream and not form-data object
 	// note: we can't clone the form-data object without having it as a dependency
-	if ((body instanceof Stream) && (typeof body.getBoundary !== 'function')) {
+	if (bodyType === "Stream") {
 		// tee instance body
-		p1 = new PassThrough();
-		p2 = new PassThrough();
-		body.pipe(p1);
-		body.pipe(p2);
+		let p1 = new PassThrough();
+		let p2 = new PassThrough();
+
 		// set instance body to teed body and return the other teed body
 		instance[INTERNALS].body = p1;
-		body = p2;
+		instance[INTERNALS].readableStream = createReadableStream(instance);
+
+		body.pipe(p1);
+		body.pipe(p2);
+		// body.resume();
+
+		return p2;
+	} else if(bodyType === "ReadableStream") {
+		let [p1, p2] = body.tee();
+
+		// set instance body to teed body and return the other teed body
+		instance[INTERNALS].body = p1;
+		instance[INTERNALS].readableStream = p1;
+
+		return p2;
 	}
 
+	// Note the early returns
 	return body;
 }
 
@@ -402,38 +520,21 @@ export function clone(instance) {
  * @param   Mixed  instance  Response or Request instance
  */
 export function extractContentType(instance) {
-	const {body} = instance;
+	const body = getInstanceBody(instance);
+	const bodyType = getTypeOfBody(body);
 
-	// istanbul ignore if: Currently, because of a guard in Request, body
-	// can never be null. Included here for completeness.
-	if (body === null) {
-		// body is null
-		return null;
-	} else if (typeof body === 'string') {
-		// body is string
-		return 'text/plain;charset=UTF-8';
-	} else if (isURLSearchParams(body)) {
-	 	// body is a URLSearchParams
-		return 'application/x-www-form-urlencoded;charset=UTF-8';
-	} else if (body instanceof Blob) {
-		// body is blob
-		return body.type || null;
-	} else if (Buffer.isBuffer(body)) {
-		// body is buffer
-		return null;
-	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-		return null;
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
-		return null;
-	} else if (typeof body.getBoundary === 'function') {
-		// detect form data input from form-data module
-		return `multipart/form-data;boundary=${body.getBoundary()}`;
-	} else {
-		// body is stream
-		// can't really do much about this
-		return null;
+	switch(bodyType) {
+		case "String":
+		case "other":
+			return 'text/plain;charset=UTF-8';
+		case "URLSearchParams":
+			return 'application/x-www-form-urlencoded;charset=UTF-8';
+		case "Blob":
+			return body.type || null;
+		case "FormData":
+			return `multipart/form-data;boundary=${body.getBoundary()}`;
+		default:
+			return null;
 	}
 }
 
@@ -447,85 +548,121 @@ export function extractContentType(instance) {
  * @return  Number?            Number of bytes, or null if not possible
  */
 export function getTotalBytes(instance) {
-	const {body} = instance;
+	const body = getInstanceBody(instance);
+	const bodyType = getTypeOfBody(body);
 
-	// istanbul ignore if: included for completion
-	if (body === null) {
-		// body is null
-		return 0;
-	} else if (typeof body === 'string') {
-		// body is string
-		return Buffer.byteLength(body);
-	} else if (isURLSearchParams(body)) {
-		// body is URLSearchParams
-		return Buffer.byteLength(String(body));
-	} else if (body instanceof Blob) {
-		// body is blob
-		return body.size;
-	} else if (Buffer.isBuffer(body)) {
-		// body is buffer
-		return body.length;
-	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-		return body.byteLength;
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
-		return body.byteLength;
-	} else if (body && typeof body.getLengthSync === 'function') {
-		// detect form data input from form-data module
-		if (body._lengthRetrievers && body._lengthRetrievers.length == 0 || // 1.x
-			body.hasKnownLength && body.hasKnownLength()) { // 2.x
-			return body.getLengthSync();
-		}
-		return null;
-	} else {
-		// body is stream
-		// can't really do much about this
-		return null;
+	switch (bodyType) {
+		case "null":
+			return 0;
+		case "String":
+			return Buffer.byteLength(body);
+		case "URLSearchParams":
+		case "other":
+			return Buffer.byteLength(String(body));
+		case "Blob":
+			return body.size;
+		case "Buffer":
+			return body.length;
+		case "ArrayBuffer":
+		case "ArrayBufferView":
+			return body.byteLength;
+		case "FormData":
+			if (
+				(body._lengthRetrievers && body._lengthRetrievers.length == 0) || // 1.x
+				(body.hasKnownLength && body.hasKnownLength())
+			) { // 2.x
+				return body.getLengthSync();
+			}
+		default:
+			return null;
 	}
 }
 
 /**
- * Write a Body to a Node.js WritableStream (e.g. http.Request) object.
+ * Write a Body to a Node.j (e.g. http.Request) object.
  *
  * @param   Body    instance   Instance of Body
  * @return  Void
  */
 export function writeToStream(dest, instance) {
-	const {body} = instance;
+	const body = getInstanceBody(instance);
+	const bodyType = getTypeOfBody(body);
 
-	if (body === null) {
-		// body is null
-		dest.end();
-	} else if (typeof body === 'string') {
-		// body is string
-		dest.write(body);
-		dest.end();
-	} else if (isURLSearchParams(body)) {
-		// body is URLSearchParams
-		dest.write(Buffer.from(String(body)));
-		dest.end();
-	} else if (body instanceof Blob) {
-		// body is blob
-		dest.write(body[BUFFER]);
-		dest.end();
-	} else if (Buffer.isBuffer(body)) {
-		// body is buffer
-		dest.write(body);
-		dest.end()
-	} else if (Object.prototype.toString.call(body) === '[object ArrayBuffer]') {
-		// body is ArrayBuffer
-		dest.write(Buffer.from(body));
-		dest.end()
-	} else if (ArrayBuffer.isView(body)) {
-		// body is ArrayBufferView
-		dest.write(Buffer.from(body.buffer, body.byteOffset, body.byteLength));
-		dest.end()
-	} else {
-		// body is stream
-		body.pipe(dest);
+	switch(bodyType) {
+		case "null":
+			dest.end();
+			break;
+		case "Stream":
+			body.pipe(dest);
+			break;
+		case "ReadableStream":
+			const [out1, out2] = body.tee();
+			const reader = out2.getReader();
+
+			function push() {
+				reader.read().then(function(read) {
+					if (read.done) {
+						dest.end();
+						return;
+					}
+
+					// TODO: Should we only do Buffer.from() if chunk is a UInt8Array?
+					// if(isUInt8Array(chunk)) {
+					dest.write(Buffer.from(read.value));
+					push();
+				});
+			}
+
+			instance[INTERNALS].body = out1;
+
+			push();
+			break;
+		case "String":
+			dest.write(body);
+			dest.end();
+			break;
+		// case "URLSearchParams":
+		// 	dest.write(body.toString());
+		// 	dest.end();
+		// 	break;
+		case "Blob":
+			dest.write(body[BUFFER]);
+			dest.end();
+			break;
+		case "Buffer":
+			dest.write(body);
+			dest.end();
+			break;
+		case "ArrayBuffer":
+			dest.write(Buffer.from(body));
+			dest.end();
+			break;
+		case "ArrayBufferView":
+			dest.write(Buffer.from(body.buffer, body.byteOffset, body.byteLength));
+			dest.end();
+			break;
+		case "FormData":
+			body.pipe(dest);
+			break;
+		default:
+			dest.write(String(body));
+			dest.end();
+			break;
 	}
 }
 
-// expose Promise
-Body.Promise = global.Promise;
+export function getInstanceName(instance) {
+	return instance[INTERNALS].name;
+}
+
+export function getInstanceBody(instance) {
+	return instance[INTERNALS].body;
+}
+
+export function setInstanceBody(instance, newBody) {
+	return instance[INTERNALS].body = newBody;
+}
+
+export function getInstanceReadableStream(instance) {
+	return instance[INTERNALS].readableStream;
+}

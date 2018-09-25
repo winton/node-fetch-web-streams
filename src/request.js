@@ -9,7 +9,7 @@
 
 import { format as format_url, parse as parse_url } from 'url';
 import Headers, { exportNodeCompatibleHeaders } from './headers.js';
-import Body, { clone, extractContentType, getTotalBytes } from './body';
+import Body, { cloneBody, extractContentType, getTotalBytes, getInstanceBody, getTypeOfBody } from './body';
 
 const INTERNALS = Symbol('Request internals');
 
@@ -56,25 +56,27 @@ export default class Request {
 		let method = init.method || input.method || 'GET';
 		method = method.toUpperCase();
 
-		if ((init.body != null || isRequest(input) && input.body !== null) &&
-			(method === 'GET' || method === 'HEAD')) {
+		if ((init.body != null || isRequest(input) && getInstanceBody(input) !== null) &&
+		(method === 'GET' || method === 'HEAD')) {
 			throw new TypeError('Request with GET/HEAD method cannot have body');
 		}
 
-		let inputBody = init.body != null ?
-			init.body :
-			isRequest(input) && input.body !== null ?
-				clone(input) :
-				null;
+		let inputBody = null;
+		if (init.body != null) {
+			inputBody = init.body;
+		} else if (isRequest(input) && getInstanceBody(input) != null) {
+			inputBody = cloneBody(input);
+		}
 
 		Body.call(this, inputBody, {
 			timeout: init.timeout || input.timeout || 0,
-			size: init.size || input.size || 0
+			size: init.size || input.size || 0,
+			parent: "Request"
 		});
 
 		const headers = new Headers(init.headers || input.headers || {});
 
-		if (init.body != null) {
+		if (inputBody !== null) {
 			const contentType = extractContentType(this);
 			if (contentType !== null && !headers.has('Content-Type')) {
 				headers.append('Content-Type', contentType);
@@ -151,6 +153,7 @@ Object.defineProperties(Request.prototype, {
 export function getNodeRequestOptions(request) {
 	const parsedURL = request[INTERNALS].parsedURL;
 	const headers = new Headers(request[INTERNALS].headers);
+	const body = getInstanceBody(request);
 
 	// fetch step 1.3
 	if (!headers.has('Accept')) {
@@ -168,15 +171,17 @@ export function getNodeRequestOptions(request) {
 
 	// HTTP-network-or-cache fetch steps 2.4-2.7
 	let contentLengthValue = null;
-	if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
+	if (body == null && /^(POST|PUT)$/i.test(request.method)) {
 		contentLengthValue = '0';
 	}
-	if (request.body != null) {
+
+	if (body != null) {
 		const totalBytes = getTotalBytes(request);
 		if (typeof totalBytes === 'number') {
 			contentLengthValue = String(totalBytes);
 		}
 	}
+
 	if (contentLengthValue) {
 		headers.set('Content-Length', contentLengthValue);
 	}
