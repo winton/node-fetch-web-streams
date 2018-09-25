@@ -1,7 +1,7 @@
 {
-  "name": "node-fetch",
-  "version": "2.2.0",
-  "description": "A light-weight module that brings window.fetch to node.js",
+  "name": "@titelmedia/node-fetch",
+  "version": "3.0.0",
+  "description": "A light-weight module that brings the Fetch API to node.js; Forked from https://npm.im/node-fetch",
   "main": "lib/index",
   "module": "lib/index.mjs",
   "files": [
@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/bitinn/node-fetch.git"
+    "url": "https://github.com/titel-media/node-fetch.git"
   },
   "keywords": [
     "fetch",
@@ -31,9 +31,9 @@
   "author": "David Frank",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/bitinn/node-fetch/issues"
+    "url": "https://github.com/titel-media/node-fetch/issues"
   },
-  "homepage": "https://github.com/bitinn/node-fetch",
+  "homepage": "https://github.com/titel-media/node-fetch",
   "devDependencies": {
     "babel-core": "^6.26.0",
     "babel-plugin-istanbul": "^4.1.5",
