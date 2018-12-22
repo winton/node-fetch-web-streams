@@ -177,7 +177,12 @@ export default function Body(body, {
 		name
 	};
 
-	this[INTERNALS].readableStream = createReadableStream(this)
+	const bodyType = getTypeOfBody(body);
+	if (bodyType !== 'ReadableStream') {
+		this[INTERNALS].readableStream = createReadableStream(this);
+	} else {
+		this[INTERNALS].readableStream = body;
+	}
 }
 
 Body.prototype = {
