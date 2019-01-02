@@ -58,13 +58,20 @@ function readableNodeToWeb(nodeStream, instance) {
 				// TODO: Should we only do Buffer.from() if chunk is a UInt8Array?
 				// Potentially it makes more sense for down-stream consumers of fetch to cast to Buffer, instead?
 				// if(isUInt8Array(chunk)) {
-				controller.enqueue(Buffer.from(chunk));
+				controller.enqueue(new Uint8Array(Buffer.from(chunk)));
 
 				// HELP WANTED: The node-web-streams package pauses the nodeStream here, however,
 				// if we do that, then it gets permanently paused. Why?
                 // 		nodeStream.pause();
             });
-            nodeStream.on('end', () => controller.close());
+            nodeStream.on('end', () => {
+				controller.close();
+
+				const pending = controller.byobRequest;
+				if (pending) {
+					pending.respond(0);
+				}
+			});
             nodeStream.on('error', (err) => {
 				controller.error(new FetchError(`Invalid response body while trying to fetch ${instance.url}: ${err.message}`, 'system', err))
 			});
@@ -74,7 +81,8 @@ function readableNodeToWeb(nodeStream, instance) {
         },
         cancel(reason) {
             nodeStream.pause();
-        }
+		},
+		type: "bytes"
     });
 }
 
@@ -92,7 +100,7 @@ export function createReadableStream(instance) {
 				// TODO: Should we only do Buffer.from() if chunk is a UInt8Array?
 				// Potentially it makes more sense for down-stream consumers of fetch to cast to Buffer, instead?
 				// if(isUInt8Array(chunk)) {
-				controller.enqueue(Buffer.from(chunk))
+				controller.enqueue(new Uint8Array(Buffer.from(chunk)));
 			}
 		}));
 	}
@@ -107,46 +115,47 @@ export function createReadableStream(instance) {
 			switch (bodyType) {
 				case "String":
 					// body is a string:
-					controller.enqueue(Buffer.from(body));
+					controller.enqueue(new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "URLSearchParams":
 					// body is a URLSearchParams
-					controller.enqueue(Buffer.from(body.toString()));
+					controller.enqueue(new Uint8Array(Buffer.from(body.toString())));
 					controller.close();
 					break;
 				case "Blob":
 					// body is blob
-					controller.enqueue(Buffer.from(body[BUFFER]));
+					controller.enqueue(new Uint8Array(Buffer.from(body[BUFFER])));
 					controller.close();
 					break;
 				case "Buffer":
 					// body is Buffer
-					controller.enqueue(Buffer.from(body))
+					controller.enqueue(new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "ArrayBuffer":
 					// body is ArrayBuffer
-					controller.enqueue(Buffer.from(body))
+					controller.enqueue(new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "ArrayBufferView":
 					// body is ArrayBufferView
-					controller.enqueue(Buffer.from(body.buffer))
+					controller.enqueue(new Uint8Array(Buffer.from(body.buffer)));
 					controller.close();
 					break;
 				case "FormData":
-					controller.enqueue(Buffer.from(body.toString()));
+					controller.enqueue(new Uint8Array(Buffer.from(body.toString())));
 					controller.close();
 					break;
 				case "other":
-					controller.enqueue(Buffer.from(String(body)));
+					controller.enqueue(new Uint8Array(Buffer.from(String(body))));
 					controller.close();
 					break;
 				default:
 					throw new Error("createReadableStream received an instance body that getTypeOfBody could not understand");
 			}
-		}
+		},
+		type: "bytes"
 	});
 
 	return readable;
