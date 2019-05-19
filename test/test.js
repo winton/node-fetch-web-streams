@@ -2141,6 +2141,7 @@ describe("Request", function() {
       "arrayBuffer",
       "blob",
       "json",
+      "formData",
       "text",
       "method",
       "url",
@@ -2292,6 +2293,22 @@ describe("Request", function() {
     expect(req.url).to.equal(url);
     return req.json().then(result => {
       expect(result.a).to.equal(1);
+    });
+  });
+
+  it("should support formData() method", function() {
+    const url = base;
+    const req = new Request(url, {
+      method: "POST",
+      body: 'a=1&b=2',
+	  headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+	  }
+    });
+    expect(req.url).to.equal(url);
+    return req.formData().then(result => {
+      expect(result.get('a')).to.equal('1');
+      expect(result.get('b')).to.equal('2');
     });
   });
 
