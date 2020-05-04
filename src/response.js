@@ -6,6 +6,7 @@
  */
 
 import { STATUS_CODES } from 'http';
+import { parse as parse_url } from 'url';
 import Headers from './headers.js';
 import Body, { cloneBody , getInstanceName} from './body';
 
@@ -73,6 +74,34 @@ export default class Response {
 			ok: this.ok,
 			name: `cloned(${getInstanceName(this)})`
 		});
+	}
+
+	static redirect(url, status) {
+		//1. Let parsedURL be the result of parsing url with current settings object’s API base URL.
+		//2. If parsedURL is failure, then throw a TypeError.
+		const parsedURL = parse_url(url);
+
+		//3. If status is not a redirect status, then throw a RangeError.
+		let intStatus = parseInt(status, 10);å
+		if(intStatus < 300 || intStatus > 399) {
+			throw new RangeError('Not a redirect status');
+		}
+
+		//4. Let r be a new Response object, whose response is a new response.
+		//5. Set r’s headers to a new Headers object whose guard is "immutable".
+		//6. Set r’s response’s status to status.
+		//7. Append `Location` to parsedURL, serialized and isomorphic encoded, in r’s response’s header list.
+		const r = new Response(new Body(""), {
+			url,
+			status: intStatus,
+			name: `redirected(${url})`,
+			headers: new Headers({
+				Location: url,
+			}, { guard: 'immutable' }),
+		});
+
+		//8. Return r.
+		return r;
 	}
 }
 

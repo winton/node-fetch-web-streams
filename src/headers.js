@@ -22,6 +22,12 @@ function validateValue(value) {
 	}
 }
 
+function checkGuard(obj) {
+	if (obj._guard === 'immutable') {
+		throw new TypeError("Cannot modify header. Immutable guard is set.")
+	}
+}
+
 /**
  * Find the key in the map object given a header name.
  *
@@ -46,9 +52,10 @@ export default class Headers {
 	 * Headers class
 	 *
 	 * @param   Object  headers  Response headers
+	 * @param 	Object 	options 	
 	 * @return  Void
 	 */
-	constructor(init = undefined) {
+	constructor(init = undefined, options = undefined) {
 		this[MAP] = Object.create(null);
 
 		if (init instanceof Headers) {
@@ -101,6 +108,19 @@ export default class Headers {
 		} else {
 			throw new TypeError('Provided initializer must be an object');
 		}
+
+		if (options == null) {
+			// no op
+		} else if (typeof options === 'object') {
+			if (options.guard) {
+				// @TODO validate values for guard
+				this._guard = options.guard;
+			} else {
+				this._guard = 'none';
+			}
+		} else {
+			throw new TypeError('Provided options must be an object');
+		}
 	}
 
 	/**
@@ -146,6 +166,8 @@ export default class Headers {
 	 * @return  Void
 	 */
 	set(name, value) {
+		checkGuard(this);
+
 		name = `${name}`;
 		value = `${value}`;
 		validateName(name);
@@ -162,6 +184,8 @@ export default class Headers {
 	 * @return  Void
 	 */
 	append(name, value) {
+		checkGuard(this);
+
 		name = `${name}`;
 		value = `${value}`;
 		validateName(name);
@@ -193,6 +217,8 @@ export default class Headers {
 	 * @return  Void
 	 */
 	delete(name) {
+		checkGuard(this);
+
 		name = `${name}`;
 		validateName(name);
 		const key = find(this[MAP], name);
