@@ -1,6 +1,6 @@
 {
   "name": "@titelmedia/node-fetch",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "description": "A light-weight module that brings the Fetch API to node.js; Forked from https://npm.im/node-fetch",
   "main": "lib/index",
   "module": "lib/index.mjs",
