@@ -76,13 +76,13 @@ export default class Response {
 		});
 	}
 
-	static redirect(url, status) {
+	static redirect(url, status = 302) {
 		//1. Let parsedURL be the result of parsing url with current settings object’s API base URL.
 		//2. If parsedURL is failure, then throw a TypeError.
 		const parsedURL = parse_url(url);
 
 		//3. If status is not a redirect status, then throw a RangeError.
-		let intStatus = parseInt(status, 10);å
+		let intStatus = parseInt(status, 10);
 		if(intStatus < 300 || intStatus > 399) {
 			throw new RangeError('Not a redirect status');
 		}
