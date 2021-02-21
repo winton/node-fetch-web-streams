@@ -2084,6 +2084,11 @@ describe("Response", function() {
     });
   });
 
+  it("should support empty string as body", function () {
+    const res = new Response("");
+    return res.text().then(result => expect(result).to.equal(""));
+  });
+
   it("should support buffer as body", function() {
     const res = new Response(Buffer.from("a=1"));
     return res.text().then(result => {
@@ -2117,6 +2122,16 @@ describe("Response", function() {
     return res.text().then(result => {
       expect(result).to.equal("a=1");
     });
+  });
+
+  it("should support empty Array as body", function () {
+    const res = new Response([]);
+    return res.text().then(result => expect(result).to.equal(""));
+  });
+
+  it("should support number as body", function () {
+    const res = new Response(123);
+    return res.text().then(result => expect(result).to.equal("123"));
   });
 
   it("should default to null as body", function() {

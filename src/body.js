@@ -16,10 +16,6 @@ import FormData from "formdata-node";
 let convert;
 try { convert = require('encoding').convert; } catch(e) {}
 
-function isUInt8Array(value) {
-	return Object.prototype.toString.call(chunk) === "[object UInt8Array]";
-}
-
 export const INTERNALS = Symbol('Body internals');
 
 export function getTypeOfBody(body) {
@@ -88,6 +84,12 @@ function readableNodeToWeb(nodeStream, instance) {
     });
 }
 
+function enqueueGuard(controller, array) {
+	if (array.length) {
+		controller.enqueue(array)
+	}
+}
+
 export function createReadableStream(instance) {
 	const body = getInstanceBody(instance);
 	const bodyType = getTypeOfBody(body);
@@ -117,40 +119,40 @@ export function createReadableStream(instance) {
 			switch (bodyType) {
 				case "String":
 					// body is a string:
-					controller.enqueue(new Uint8Array(Buffer.from(body)));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "URLSearchParams":
 					// body is a URLSearchParams
-					controller.enqueue(new Uint8Array(Buffer.from(body.toString())));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body.toString())));
 					controller.close();
 					break;
 				case "Blob":
 					// body is blob
-					controller.enqueue(new Uint8Array(Buffer.from(body[BUFFER])));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body[BUFFER])));
 					controller.close();
 					break;
 				case "Buffer":
 					// body is Buffer
-					controller.enqueue(new Uint8Array(Buffer.from(body)));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "ArrayBuffer":
 					// body is ArrayBuffer
-					controller.enqueue(new Uint8Array(Buffer.from(body)));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body)));
 					controller.close();
 					break;
 				case "ArrayBufferView":
 					// body is ArrayBufferView
-					controller.enqueue(new Uint8Array(Buffer.from(body.buffer)));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body.buffer)));
 					controller.close();
 					break;
 				case "FormData":
-					controller.enqueue(new Uint8Array(Buffer.from(body.toString())));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(body.toString())));
 					controller.close();
 					break;
 				case "other":
-					controller.enqueue(new Uint8Array(Buffer.from(String(body))));
+					enqueueGuard(controller, new Uint8Array(Buffer.from(String(body))));
 					controller.close();
 					break;
 				default:

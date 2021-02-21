@@ -6,7 +6,6 @@
  */
 
 import { STATUS_CODES } from 'http';
-import { parse as parse_url } from 'url';
 import Headers from './headers.js';
 import Body, { cloneBody , getInstanceName} from './body.js';
 
@@ -79,7 +78,7 @@ export default class Response {
 	static redirect(url, status = 302) {
 		//1. Let parsedURL be the result of parsing url with current settings object’s API base URL.
 		//2. If parsedURL is failure, then throw a TypeError.
-		const parsedURL = parse_url(url);
+		const parsedURL = new URL(url);
 
 		//3. If status is not a redirect status, then throw a RangeError.
 		let intStatus = parseInt(status, 10);
@@ -91,12 +90,12 @@ export default class Response {
 		//5. Set r’s headers to a new Headers object whose guard is "immutable".
 		//6. Set r’s response’s status to status.
 		//7. Append `Location` to parsedURL, serialized and isomorphic encoded, in r’s response’s header list.
-		const r = new Response(new Body(""), {
-			url,
+		const r = new Response(null, {
+			url: "",
 			status: intStatus,
 			name: `redirected(${url})`,
 			headers: new Headers({
-				Location: url,
+				Location: parsedURL.toString(),
 			}, { guard: 'immutable' }),
 		});
 

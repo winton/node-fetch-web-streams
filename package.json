@@ -1,7 +1,7 @@
 {
   "name": "node-fetch-web-streams",
-  "version": "1.0.0",
-  "description": "A light-weight module that brings the Fetch API to node.js; Forked from https://npm.im/node-fetch",
+  "version": "1.0.1",
+  "description": "Brings the Fetch API with the Streams API to Node.js",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
   "type": "module",
@@ -28,7 +28,9 @@
   "keywords": [
     "fetch",
     "http",
-    "promise"
+    "promise",
+    "whatwg",
+    "streams"
   ],
   "author": "David Frank",
   "license": "MIT",
