@@ -9,16 +9,15 @@
 
 import http from 'http';
 import https from 'https';
-import zlib from 'zlib';
+import zlib, { constants as zlibConstants } from 'zlib';
 
-// import { ReadableStream, WritableStream, TransformStream } from "web-streams-polyfill";
 import { PassThrough } from 'stream';
 
-import { writeToStream, getTotalBytes, getInstanceBody } from './body';
-import Response from './response';
-import Headers, { createHeadersLenient } from './headers';
-import Request, { getNodeRequestOptions } from './request';
-import FetchError from './fetch-error';
+import { writeToStream, getTotalBytes, getInstanceBody } from './body.js';
+import Response from './response.js';
+import Headers, { createHeadersLenient } from './headers.js';
+import Request, { getNodeRequestOptions } from './request.js';
+import FetchError from './fetch-error.js';
 
 /**
  * Fetch function
@@ -41,12 +40,12 @@ export default function fetch(url, opts) {
 		let reqTimeout;
 
 		function finalize() {
-			req.abort();
+			req.destroy();
 			clearTimeout(reqTimeout);
 		}
 
 		if (request.timeout) {
-			req.once('socket', socket => {
+			req.once('socket', () => {
 				reqTimeout = setTimeout(() => {
 					reject(new FetchError(`network timeout at: ${request.url}`, 'request-timeout'));
 					finalize();
@@ -171,8 +170,8 @@ export default function fetch(url, opts) {
 			// by common browsers.
 			// Always using Z_SYNC_FLUSH is what cURL does.
 			const zlibOptions = {
-				flush: zlib.Z_SYNC_FLUSH,
-				finishFlush: zlib.Z_SYNC_FLUSH
+				flush: zlibConstants.Z_SYNC_FLUSH,
+				finishFlush: zlibConstants.Z_SYNC_FLUSH
 			};
 
 			// for gzip

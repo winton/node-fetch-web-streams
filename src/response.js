@@ -8,7 +8,7 @@
 import { STATUS_CODES } from 'http';
 import { parse as parse_url } from 'url';
 import Headers from './headers.js';
-import Body, { cloneBody , getInstanceName} from './body';
+import Body, { cloneBody , getInstanceName} from './body.js';
 
 const INTERNALS = Symbol('Response internals');
 

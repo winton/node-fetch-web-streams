@@ -2,7 +2,8 @@ import * as http from 'http';
 import { parse } from 'url';
 import * as zlib from 'zlib';
 import * as stream from 'stream';
-import { multipart as Multipart } from 'parted';
+import parted from 'parted';
+const { multipart: Multipart } = parted;
 
 let convert;
 try { convert = require('encoding').convert; } catch(e) {}
@@ -373,9 +374,9 @@ export default class TestServer {
 	}
 }
 
-if (require.main === module) {
-	const server = new TestServer;
-	server.start(() => {
-		console.log(`Server started listening at port ${server.port}`);
-	});
-}
+// //if (require.main === module) {
+// 	const server = new TestServer;
+// 	server.start(() => {
+// 		console.log(`Server started listening at port ${server.port}`);
+// 	});
+// //}

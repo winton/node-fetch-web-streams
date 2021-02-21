@@ -9,7 +9,7 @@
 
 import { format as format_url, parse as parse_url } from 'url';
 import Headers, { exportNodeCompatibleHeaders } from './headers.js';
-import Body, { cloneBody, extractContentType, getTotalBytes, getInstanceBody, getTypeOfBody } from './body';
+import Body, { cloneBody, extractContentType, getTotalBytes, getInstanceBody, getTypeOfBody } from './body.js';
 
 const INTERNALS = Symbol('Request internals');
 

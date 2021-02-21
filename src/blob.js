@@ -73,7 +73,9 @@ export default class Blob {
 Object.defineProperties(Blob.prototype, {
 	size: { enumerable: true },
 	type: { enumerable: true },
-	slice: { enumerable: true }
+	arrayBuffer: { enumerable: true },
+	slice: { enumerable: true },
+	text: { enumerable: true }
 });
 
 Object.defineProperty(Blob.prototype, Symbol.toStringTag, {

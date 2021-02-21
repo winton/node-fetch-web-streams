@@ -1,27 +1,18 @@
-import isBuiltin from 'is-builtin-module';
-import babel from 'rollup-plugin-babel';
-import tweakDefault from './build/rollup-plugin';
-
-process.env.BABEL_ENV = 'rollup';
+import { builtinModules } from 'module';
+import { dependencies } from './package.json';
 
 export default {
   input: 'src/index.js',
-  output: [
-    { file: 'lib/index.js', format: 'cjs', exports: 'named' },
-    { file: 'lib/index.es.js', format: 'es', exports: 'named', intro: 'process.emitWarning("The .es.js file is deprecated. Use .mjs instead.");' },
-    { file: 'lib/index.mjs', format: 'es', exports: 'named' },
-  ],
-  plugins: [
-    babel({
-      runtimeHelpers: true
-    }),
-    tweakDefault()
-  ],
-  external: function (id) {
-    if (isBuiltin(id)) {
-      return true;
-    }
-    id = id.split('/').slice(0, id[0] === '@' ? 2 : 1).join('/');
-    return !!require('./package.json').dependencies[id];
-  }
+  output: {
+    file: 'dist/index.cjs',
+    format: 'cjs',
+    esModule: false,
+    interop: false,
+    sourcemap: true,
+    preferConst: true,
+    exports: 'named',
+    // https://github.com/rollup/rollup/issues/1961#issuecomment-534977678
+    intro: 'exports = module.exports = fetch;'
+  },
+  external: [...builtinModules, ...Object.keys(dependencies)]
 };

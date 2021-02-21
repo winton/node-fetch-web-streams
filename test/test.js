@@ -6,19 +6,18 @@ import chaiString from "chai-string";
 import resumer from "resumer";
 import FormData from "form-data";
 import stringToArrayBuffer from "string-to-arraybuffer";
-import URLSearchParams_Polyfill from "url-search-params";
 import { ReadableStream } from "web-streams-polyfill";
 import { URL } from "whatwg-url";
 import { TextDecoder } from "util";
 
-const { spawn } = require("child_process");
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
-const stream = require("stream");
-const { parse: parseURL, URLSearchParams } = require("url");
-const { lookup } = require("dns");
-const vm = require("vm");
+import { spawn } from "child_process";
+import http from "http"
+import fs from "fs"
+import path from "path"
+import stream from "stream"
+import { parse as parseURL, URLSearchParams  } from "url"
+import { lookup  } from "dns"
+import vm from "vm"
 
 const {
   ArrayBuffer: VMArrayBuffer,
@@ -37,10 +36,10 @@ chai.use(chaiIterator);
 chai.use(chaiString);
 const expect = chai.expect;
 
-import TestServer from "./server";
+import TestServer from "./server.js";
 
 // test subjects
-import fetch, { FetchError, Headers, Request, Response } from "../src/";
+import fetch, { FetchError, Headers, Request, Response } from "../src/index.js";
 import FetchErrorOrig from "../src/fetch-error.js";
 import HeadersOrig from "../src/headers.js";
 import RequestOrig from "../src/request.js";
@@ -1112,7 +1111,7 @@ describe("node-fetch", () => {
     const form = new FormData();
     form.append(
       "my_field",
-      fs.createReadStream(path.join(__dirname, "dummy.txt"))
+      fs.createReadStream("test/dummy.txt")
     );
 
     const url = `${base}multipart`;
@@ -1231,7 +1230,7 @@ describe("node-fetch", () => {
   /* for 100% code coverage, checks for duck-typing-only detection
 	 * where both constructor.name and brand tests fail */
   it("should still recognize URLSearchParams when extended from polyfill", function() {
-    class CustomPolyfilledSearchParams extends URLSearchParams_Polyfill {}
+    class CustomPolyfilledSearchParams extends URLSearchParams {}
     const params = new CustomPolyfilledSearchParams();
     params.append("a", "1");
 
