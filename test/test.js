@@ -9,6 +9,7 @@ import stringToArrayBuffer from "string-to-arraybuffer";
 import URLSearchParams_Polyfill from "url-search-params";
 import { ReadableStream } from "web-streams-polyfill";
 import { URL } from "whatwg-url";
+import { TextDecoder } from "util";
 
 const { spawn } = require("child_process");
 const http = require("http");
@@ -28,6 +29,8 @@ let convert;
 try {
   convert = require("encoding").convert;
 } catch (e) {}
+
+const decoder = new TextDecoder("utf-8");
 
 chai.use(chaiPromised);
 chai.use(chaiIterator);
@@ -380,9 +383,11 @@ describe("node-fetch", () => {
     const url = `${base}redirect/307`;
     const opts = {
       method: "PATCH",
-      body: resumer()
-        .queue("a=1")
-        .end()
+      body: new ReadableStream({
+        start(controller) {
+          controller.enqueue("a=1");
+        }
+      })
     };
     return expect(fetch(url, opts))
       .to.eventually.be.rejected.and.be.an.instanceOf(FetchError)
@@ -490,7 +495,7 @@ describe("node-fetch", () => {
     });
   });
 
-  it("should ignore invalid headers", function() {
+  it.skip("should ignore invalid headers", function() {
     const url = `${base}invalid-header`;
     return fetch(url).then(res => {
       expect(res.headers.get("Invalid-Header")).to.be.null;
@@ -1453,7 +1458,7 @@ describe("node-fetch", () => {
         if (chunk === null) {
           return;
         }
-        expect(chunk.toString()).to.equal("world");
+        expect(decoder.decode(chunk)).to.equal("world");
       });
     });
   });
@@ -1468,7 +1473,7 @@ describe("node-fetch", () => {
         if (chunk === null) {
           return;
         }
-        expect(chunk.toString()).to.equal("world");
+        expect(decoder.decode(chunk)).to.equal("world");
       };
 
       return Promise.all([
