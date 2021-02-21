@@ -7,7 +7,6 @@
  * All spec algorithm step numbers are based on https://fetch.spec.whatwg.org/commit-snapshots/ae716822cb3a61843226cd090eefc6589446c1d2/.
  */
 
-import { resolve as resolve_url } from 'url';
 import http from 'http';
 import https from 'https';
 import zlib from 'zlib';
@@ -71,7 +70,7 @@ export default function fetch(url, opts) {
 				const location = headers.get('Location');
 
 				// HTTP fetch step 5.3
-				const locationURL = location === null ? null : resolve_url(request.url, location);
+				const locationURL = location === null ? null : new URL(location, request.url).toString();
 
 				// HTTP fetch step 5.5
 				switch (request.redirect) {
