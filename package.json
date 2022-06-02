@@ -1,5 +1,5 @@
 {
-  "name": "node-fetch-web-streams",
+  "name": "@winton/node-fetch-web-streams",
   "version": "1.0.1",
   "description": "Brings the Fetch API with the Streams API to Node.js",
   "main": "./dist/index.cjs",
