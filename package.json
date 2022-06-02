@@ -4,6 +4,7 @@
   "description": "Brings the Fetch API with the Streams API to Node.js",
   "main": "./dist/index.cjs",
   "module": "./src/index.js",
+  "typings": "./src/index.d.ts",
   "type": "module",
   "exports": {
     "import": "./src/index.js",
