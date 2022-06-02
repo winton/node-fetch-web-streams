@@ -11,7 +11,7 @@ import Blob, { BUFFER } from './blob.js';
 import FetchError from './fetch-error.js';
 import Stream, { PassThrough } from "stream";
 import Busboy from "busboy";
-import FormData from "formdata-node";
+import { FormData } from "formdata-node";
 
 let convert;
 try { convert = require('encoding').convert; } catch(e) {}
@@ -289,7 +289,7 @@ Body.prototype = {
 		return consumeBody.call(this).then(buffer => {
 			return new Promise((resolve, reject) => {
 				var formdata = new FormData();
-				var busboy = new Busboy({headers: {
+				var busboy = Busboy({headers: {
 					'content-type': this.headers.get('content-type'),
 				}});
 				busboy.on('field', (fieldname, val) => formdata.append(fieldname, val));
